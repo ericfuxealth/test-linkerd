@@ -57,5 +57,14 @@ The pod stops working once Linkerd is added. Error
 Readiness probe failed: Get "http://10.10.37.71:4191/ready": context deadline exceeded (Client.Timeout exceeded while awaiting headers)
 ```
 
+# What works (and not)
+
+| Linkerd | Pod SG | Network policy | Works |
+| ------- | ------ | -------------- | ----- |
+| X       | X      | X              | NO    |
+|         | X      | X              | YES   |
+| X       | X      |                | YES   |
+| X       |        | X              | YES   |
+
 
 
