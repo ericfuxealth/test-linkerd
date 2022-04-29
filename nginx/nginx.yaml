@@ -1,0 +1,128 @@
+# https://stackoverflow.com/questions/14752943/using-nginx-to-simulate-slow-response-time-for-testing-purposes
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: nginx-config
+data:
+  default.conf: |
+    server {
+      listen                  8081;
+      server_name             _;
+      root                    /usr/share/nginx/html;
+      location / {
+        index  index.html index.htm;
+      }
+    }
+
+    server {
+      listen                  8082;
+      server_name             _;
+      location / {
+            proxy_pass http://localhost:8081/;
+            limit_rate 200;
+        }
+    }
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: nginx
+spec:
+  selector:
+    matchLabels:
+      app: nginx
+  replicas: 1
+  template:
+    metadata:
+      labels:
+        app: nginx
+      # annotations:
+      #   linkerd.io/inject: enabled
+    spec:
+      containers:
+      - name: nginx
+        image: nginx
+        #
+        livenessProbe:
+          httpGet:
+            path: /
+            port: 8081
+          failureThreshold: 2
+          initialDelaySeconds: 30
+          periodSeconds: 30
+          timeoutSeconds: 12
+        #
+        ports:
+        - containerPort: 8081
+        - containerPort: 8082
+        volumeMounts:
+        - name: nginx-configs
+          mountPath: /etc/nginx/conf.d
+      volumes:
+        - name: nginx-configs
+          configMap:
+            name: nginx-config
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: nginx
+spec:
+  type: NodePort
+  ports:
+  - port: 8081
+    targetPort: 8081
+    name: normal
+  - port: 8082
+    targetPort: 8082
+    name: slow
+  selector:
+    app: nginx
+
+---
+apiVersion: vpcresources.k8s.aws/v1beta1
+kind: SecurityGroupPolicy
+metadata:
+  name: nginx-sg-policy
+spec:
+  podSelector:
+    matchLabels:
+      app: nginx
+  securityGroups:
+    groupIds:
+    - sg-005764182bcdc6fe3 # dev a/c ericfu-test4
+    # - sg-0e4794f5deb2b2264 # cluster sg
+    # - sg-0fcdd1982812901f6 # sgx-access_to_opensearch-cms-integration
+
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: default-deny-all-ingress
+spec:
+  podSelector: {}
+  policyTypes:
+  - Ingress
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: nginx-ingress
+spec:
+  ingress:
+  - ports:
+    - protocol: TCP
+      port: 8081
+    from:
+    - ipBlock:
+        cidr: 0.0.0.0/0
+    - podSelector:
+        matchLabels:
+          networking/allow-nginx: "true"
+  podSelector:
+    matchLabels:
+      app: nginx
+  policyTypes:
+  - Ingress
