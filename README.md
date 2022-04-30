@@ -12,7 +12,16 @@ This is to reproduce it in a standalone EKS cluser
 One is created in the dev account called ericfu-test4
 https://us-west-2.console.aws.amazon.com/eks/home?region=us-west-2#/clusters/ericfu-test4?selectedTab=cluster-configuration-tab
 
+Enable Pod Security Group (see https://docs.aws.amazon.com/eks/latest/userguide/security-groups-for-pods.html):
 
+```bash
+kubectl set env daemonset aws-node -n kube-system ENABLE_POD_ENI=true
+
+kubectl patch daemonset aws-node \
+  -n kube-system \
+  -p '{"spec": {"template": {"spec": {"initContainers": [{"env":[{"name":"DISABLE_TCP_EARLY_DEMUX","value":"true"}],"name":"aws-vpc-cni-init"}]}}}}'
+
+```
 
 2. Install Cilium
 
